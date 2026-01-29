@@ -1,0 +1,86 @@
+# Configuração para AMD RX 9060 16GB (ROCm)
+# Ativar quando instalar a placa AMD
+
+services:
+  # AMD GPU - RX 9060 16GB (modelos grandes)
+  ollama-amd:
+    image: ollama/ollama:rocm
+    container_name: ollama-amd
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_KEEP_ALIVE=5m
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0  # Ajustar se necessário
+    group_add:
+      - video
+      - render
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 8G
+    restart: unless-stopped
+    networks:
+      - ollama-network
+
+networks:
+  ollama-network:
+    driver: bridge
+
+# =============================================================
+# INSTRUÇÕES DE USO - AMD RX 9060
+# =============================================================
+#
+# 1. Instalar drivers AMD ROCm no host:
+#    
+#    # Adicionar repositório AMD
+#    wget https://repo.radeon.com/amdgpu-install/latest/ubuntu/jammy/amdgpu-install_6.0.60000-1_all.deb
+#    sudo dpkg -i amdgpu-install_6.0.60000-1_all.deb
+#    sudo amdgpu-install --usecase=rocm
+#    
+#    # Adicionar usuário ao grupo
+#    sudo usermod -a -G video,render $USER
+#    
+#    # Reiniciar
+#    sudo reboot
+#
+# 2. Verificar se a GPU é detectada:
+#    rocm-smi
+#
+# 3. Subir o container:
+#    docker compose -f docker-compose.amd-gpu.yml up -d
+#
+# 4. Testar:
+#    curl http://localhost:11434/api/tags
+#
+# =============================================================
+# MODELOS SUPORTADOS - RX 9060 (16GB)
+# =============================================================
+#
+#   ✅ qwen3 (4GB)
+#   ✅ llama3:8b (8GB)
+#   ✅ llama3:13b (13GB)
+#   ✅ codellama:13b (13GB)
+#   ✅ mistral (7GB)
+#   ✅ mixtral (14GB)
+#   ✅ deepseek-coder (7GB)
+#
+# =============================================================
+# VANTAGENS DA RX 9060 16GB
+# =============================================================
+#
+# - 16GB VRAM > 12GB RTX 3060
+# - Roda modelos de 13B+ confortavelmente
+# - Custo-benefício excelente
+#
+# =============================================================

@@ -1,0 +1,132 @@
+# Configuração para Servidor AMD Dual GPU
+# RX 9060 16GB + RX 6600 XT 8GB (ROCm)
+
+services:
+  # AMD GPU 0 - RX 9060 16GB (modelos grandes)
+  ollama-gpu0:
+    image: ollama/ollama:rocm
+    container_name: ollama-amd-9060
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama:ro
+      - ollama_9060_data:/root/.ollama
+    devices:
+      - /dev/kfd
+      - /dev/dri/renderD128
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_KEEP_ALIVE=5m
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - HIP_VISIBLE_DEVICES=0
+      - HSA_OVERRIDE_GFX_VERSION=11.0.0  # RX 9060 (RDNA 4)
+    group_add:
+      - video
+      - render
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 8G
+    restart: unless-stopped
+    networks:
+      - ollama-network
+
+  # AMD GPU 1 - RX 6600 XT 8GB (modelos médios)
+  ollama-gpu1:
+    image: ollama/ollama:rocm
+    container_name: ollama-amd-6600xt
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama_models:/root/.ollama:ro
+      - ollama_6600xt_data:/root/.ollama
+    devices:
+      - /dev/kfd
+      - /dev/dri/renderD129
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_KEEP_ALIVE=5m
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - HIP_VISIBLE_DEVICES=1
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0  # RX 6600 XT (RDNA 2)
+    group_add:
+      - video
+      - render
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+    restart: unless-stopped
+    networks:
+      - ollama-network
+
+  # Load Balancer (opcional)
+  ollama-lb:
+    image: nginx:alpine
+    container_name: ollama-lb
+    ports:
+      - "11430:80"
+    volumes:
+      - ./nginx-lb.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - ollama-gpu0
+      - ollama-gpu1
+    restart: unless-stopped
+    networks:
+      - ollama-network
+
+volumes:
+  ollama_models:
+    name: ollama_shared_models
+  ollama_9060_data:
+  ollama_6600xt_data:
+
+networks:
+  ollama-network:
+    driver: bridge
+
+# =============================================================
+# INSTRUÇÕES DE USO - SERVIDOR AMD DUAL GPU
+# =============================================================
+#
+# 1. Instalar drivers AMD ROCm no host:
+#    
+#    wget https://repo.radeon.com/amdgpu-install/latest/ubuntu/jammy/amdgpu-install_6.0.60000-1_all.deb
+#    sudo dpkg -i amdgpu-install_6.0.60000-1_all.deb
+#    sudo amdgpu-install --usecase=rocm
+#    sudo usermod -a -G video,render $USER
+#    sudo reboot
+#
+# 2. Verificar GPUs detectadas:
+#    rocm-smi
+#    ls -la /dev/dri/
+#
+# 3. Subir os containers:
+#    docker compose -f docker-compose.amd-dual.yml up -d
+#
+# 4. Testar cada GPU:
+#    curl http://localhost:11434/api/tags  # RX 9060
+#    curl http://localhost:11435/api/tags  # RX 6600 XT
+#    curl http://localhost:11430/api/tags  # Load Balancer
+#
+# =============================================================
+# DISTRIBUIÇÃO DE MODELOS RECOMENDADA
+# =============================================================
+#
+# RX 9060 16GB (porta 11434):
+#   - llama3:13b, mixtral, codellama:13b
+#   - Modelos pesados que precisam de mais VRAM
+#
+# RX 6600 XT 8GB (porta 11435):
+#   - qwen3, llama3:8b, mistral, deepseek-coder
+#   - Modelos leves/médios para alta vazão
+#
+# =============================================================

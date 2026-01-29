@@ -1,0 +1,10 @@
+# Ollama data
+ollama_data/
+*.log
+
+# Docker
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db

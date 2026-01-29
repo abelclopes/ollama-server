@@ -1,0 +1,106 @@
+# Configuração para 2 GPUs (RTX 3060 + GTX 1060)
+# Ativar quando instalar a segunda GPU
+
+services:
+  # GPU 0 - RTX 3060 12GB (modelos grandes)
+  ollama-gpu0:
+    image: ollama/ollama:latest
+    container_name: ollama-gpu0
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_KEEP_ALIVE=5m
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=2
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - ollama-network
+
+  # GPU 1 - GTX 1060 6GB (modelos pequenos até 4GB)
+  ollama-gpu1:
+    image: ollama/ollama:latest
+    container_name: ollama-gpu1
+    ports:
+      - "11435:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama:ro  # read-only, compartilha modelos
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=1
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_KEEP_ALIVE=5m
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 2G
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - ollama-network
+
+networks:
+  ollama-network:
+    driver: bridge
+
+# =============================================================
+# INSTRUÇÕES DE USO
+# =============================================================
+#
+# 1. Instalar a GTX 1060 fisicamente
+#
+# 2. Verificar se as 2 GPUs são detectadas:
+#    nvidia-smi
+#
+# 3. Parar o container atual:
+#    docker compose down
+#
+# 4. Renomear este arquivo para docker-compose.yml:
+#    mv docker-compose.dual-gpu.yml docker-compose.yml
+#
+# 5. Subir os 2 containers:
+#    docker compose up -d
+#
+# 6. Testar cada GPU:
+#    curl http://localhost:11434/api/tags  # GPU 0 (RTX 3060)
+#    curl http://localhost:11435/api/tags  # GPU 1 (GTX 1060)
+#
+# =============================================================
+# MODELOS SUPORTADOS POR GPU
+# =============================================================
+#
+# RTX 3060 (12GB) - porta 11434:
+#   ✅ qwen3 (4GB)
+#   ✅ llama3:8b (8GB)
+#   ✅ codellama (7GB)
+#   ✅ mistral (7GB)
+#
+# GTX 1060 (6GB) - porta 11435:
+#   ✅ qwen3 (4GB)
+#   ✅ phi3 (2GB)
+#   ✅ gemma:2b (2GB)
+#   ✅ tinyllama (1GB)
+#   ❌ llama3:8b - NÃO CABE
+#
+# =============================================================
